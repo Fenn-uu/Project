@@ -23,27 +23,32 @@ R = 0.97 # Longitudinal radius (cm)
 G = 1.519 # Longitudinal coil separation (cm)
 
 center = -0.25
+# assumed sample position shift
 
 Tmin = 250
 Tmax = 310
+#Temperature range for analysis of file 1
 
 Tmin2 = 250
 Tmax2 = 310
+#Temperature range for analysis of file 2
 
 ################################################
 
-f1 = 'file:///C:/Users/ferde233/Box Sync/Downloads/phD/Data (Quasicrystals)/Quasicrystals MPMS data/HP Background/11 12 2020/MPMS/Almax_pressure_cell (upright) _Gasket+TAS100+Nujol+Sn+Ruby_background_5000_Oe_warming_AmbientPressure_3cmfromtop_NoPressure.dc.raw'
-f2 = 'file:///C:/Users/ferde233/Box Sync/Downloads/phD/Data (Quasicrystals)/Quasicrystals MPMS data/HP Background/11 12 2020/MPMS/Almax_pressure_cell (upright) _Gasket+TAS100+Nujol+Sn+Ruby_background_5000_Oe_warming_AmbientPressure_3cmfromtop_Pressure_Reapplied.dc.raw'
+filename_1 = "Almax_pressure_cell (upright) _Gasket+TAS100+Nujol+Sn+Ruby_background_25_Oe_cooling_AmbientPressure_3cmfromtop_Pressure_Reapplied.dc.raw"
+# filename_2 = "Almax_pressure_cell (upright) _Gasket+TAS100+Nujol+Sn+Ruby_background_100_Oe_ZFC-FC_AmbientPressure_3cmfromtop_pressureapplied.dc.raw"
 #f3 = 'file:///C:/Users/ferde233/Box Sync/Downloads/phD/Data (Quasicrystals)/Quasicrystals MPMS data/HP Background/11 12 2020/MPMS/Almax_pressure_cell (upright) _Gasket+TAS100+Nujol+Sn+Ruby_background_5000_Oe_warming_AmbientPressure_3cmfromtop_pressureapplied.dc.raw'
 #f4 = 'file:///C:/Users/ferde233/Downloads/Almax_pressure_cell (upright) _Gasket+TAS100+Nujol+Sn+Ruby_background_25_Oe_cooling 4K-2Krange_AmbientPressure_3cmfromtop_Pressure_Reapplied.dc.raw'
 
 #################################################
 
+### MEMO : Headings start at row 31 and data at row 32
+###        The sample pos. is recorded at column 8 (i.e M[:,7]  ) while the averaged voltage is recorded at column 11 (i.e M[:,10]  ) from the second scan onwards
 
-filename_1 = f1.replace('file:///','')
-filename_2 = f2.replace('file:///','')
-#filename_3 = f3.replace('file:///','')
-#filename_4 = f4.replace('file:///','')
+
+
+
+
 
 
 M_raw = loadtxt(filename_1 ,dtype='str', delimiter =',',skiprows =31, usecols=(2,3,7,10))
@@ -51,8 +56,8 @@ M_raw = loadtxt(filename_1 ,dtype='str', delimiter =',',skiprows =31, usecols=(2
 M_d = loadtxt(filename_1.replace('dc.raw','dc.diag'),dtype='str', delimiter =',',skiprows =27, usecols=(7,8))
 # imports two columns from the diagnostic file : 0- "range code", 1- "gain code"
 
-M_raw2 = loadtxt(filename_2 ,dtype='str', delimiter =',',skiprows =31, usecols=(2,3,7,10))
-M_d2 = loadtxt(filename_2.replace('dc.raw','dc.diag'),dtype='str', delimiter =',',skiprows =27, usecols=(7,8))
+# M_raw2 = loadtxt(filename_2 ,dtype='str', delimiter =',',skiprows =31, usecols=(2,3,7,10))
+# M_d2 = loadtxt(filename_2.replace('dc.raw','dc.diag'),dtype='str', delimiter =',',skiprows =27, usecols=(7,8))
 
 #M_raw3 = loadtxt(filename_3 ,dtype='str', delimiter =',',skiprows =31, usecols=(2,3,7,10))
 #M_d3 = loadtxt(filename_3.replace('dc.raw','dc.diag'),dtype='str', delimiter =',',skiprows =27, usecols=(7,8))
@@ -61,7 +66,7 @@ M_d2 = loadtxt(filename_2.replace('dc.raw','dc.diag'),dtype='str', delimiter =',
 #M_d4 = loadtxt(filename_4.replace('dc.raw','dc.diag'),dtype='str', delimiter =',',skiprows =27, usecols=(7,8))
 
 
-
+##################################################################################################################
 
 Vbackground = lambda x, a, b, c, d, e, f, g, h : a*x**7 + b*x**6 + c*x**5 + d*x**4 + e*x**3 + f*x**2 + g*x + h
 # polynomial background (7th degree)
@@ -71,6 +76,12 @@ Vdipole = lambda z, C, s, m0 : C + m0 * (2*(R**2 + (z + s)**2)**(-3/2) - (R**2 +
 # C : voltage offset constant
 # s : z-axis shift of the sample from center position (usually not more than a few millimeters) 
 # m0 : amplitude, proportional to the magnetization
+
+
+
+
+
+# Note : the 'centered' functions given below assume sample position is fixed at the value given l.25
 
 Vdipole_centered = lambda z, C, m0 : C + m0 * (2*(R**2 + (z - center)**2)**(-3/2) - (R**2 + (G + (z - center))**2)**(-3/2) - (R**2 + (-G + (z - center))**2)**(-3/2)) 
 
@@ -120,11 +131,20 @@ Vdipole_lin_hyper_centered = lambda z, C, B,  a, h, m0 :   C + m0 * (2*(R**2 + (
 
 
 
+##################################################################################################################
+
+
+
+
+
+
+
 gain = [1.,2.,5.,10.] # table of the gain code values  in the diagnostic file to evaluate the moment, see Table 1 in the ref below
 M_emu = lambda m0, r, g : (m0*1.825)/(8890.6*(10**-r)*gain[int(g)]*0.9125)
-
+# calculates the magnetization in emu units from the gain 'g' and range 'r' tables in the .dc.diag file 
 # See ### https://qdusa.com/siteDocs/appNotes/1014-213.pdf    p.2
 
+############### MPMS settings ###############
 
 N_points = 32 # number of points taken per scan
 N_scans = 2 # number of scans
@@ -132,8 +152,6 @@ cut = N_points*N_scans # unless some points are rejected (rare), each scan shoul
 
 L_scan = 4 # in cm
 
-### MEMO : Headings start at l.31 and data at l.32
-###        The sample pos. is recorded at column 8 (i.e M[:,7]  ) while the averaged voltage is recorded at column 11 (i.e M[:,10]  ) from the second scan onwards
 
 
 
@@ -160,7 +178,10 @@ def Mfloat(M):  # converts the table to float numbers and fills the empty spaces
 
 
 M_raw = Mfloat(M_raw)
-M_raw2 = Mfloat(M_raw2)
+M_d = Mfloat(M_d)
+
+
+# M_raw2 = Mfloat(M_raw2)
             
         
 
@@ -173,11 +194,11 @@ T_int = array([270,280,290]) # temperatures targeted for interpolation
 bg_pos = list()
 bg_V = list() # empty list to be filled with the background data
 
-def findT(temp,p): # find the first matching temperature within accuracy p andgives out the positions and voltages arrays
+def findT( temp , acc ): # find the first matching temperature within accuracy p and gives out the positions and voltages arrays
     bg0_pos = list()
     bg0_V = list()
     for i in range(n_r):
-        if temp-p < M_raw[i,1] < temp+p :
+        if temp - acc < M_raw[i,1] < temp + acc :
             print('Matching T value found.')
             for p in range(N_points):
                 bg0_pos.append(M_raw[i+(N_scans-1)*(N_points)+p,2]-2) #appends the last position (between -2 and 2 cm)
@@ -308,7 +329,7 @@ n, t, a, b, c, d, e, f, g ,h = extrapolate(Vbackground,Tmin,Tmax,M_raw)
 
 
 
-n2, t2, a2, b2, c2, d2, e2, f2, g2 ,h2 = extrapolate(Vbackground,Tmin2,Tmax2,M_raw2)
+# n2, t2, a2, b2, c2, d2, e2, f2, g2 ,h2 = extrapolate(Vbackground,Tmin2,Tmax2,M_raw2)
 
 
 
@@ -323,14 +344,14 @@ plt.title('Fitting 7th polynomial parameters temperature dependence')
 plt.legend(('a','b','c','d','e','f','g'))
 plt.savefig('fitted_parameters.png',format='png') 
 
-plt.figure('2bis')
-plt.plot(t2,a2,'o',t2,b2,'o',t2,c2,'o',t2,d2,'o',t2,e2,'o',t2,f2,'o',t2,g2,'o')
-## I didn't include "h"
-plt.xlabel('T (K)')
-plt.ylabel('fit values')
-plt.title('Fitting 7th polynomial parameters temperature dependence')
-plt.legend(('a2','b2','c2','d2','e2','f2','g2'))
-plt.savefig('fitted_parameters_2.png',format='png') 
+# plt.figure('2bis')
+# plt.plot(t2,a2,'o',t2,b2,'o',t2,c2,'o',t2,d2,'o',t2,e2,'o',t2,f2,'o',t2,g2,'o')
+# ## I didn't include "h"
+# plt.xlabel('T (K)')
+# plt.ylabel('fit values')
+# plt.title('Fitting 7th polynomial parameters temperature dependence')
+# plt.legend(('a2','b2','c2','d2','e2','f2','g2'))
+# plt.savefig('fitted_parameters_2.png',format='png') 
 
 
 
@@ -390,14 +411,14 @@ plt.savefig('Fitting_parameters_T-dependence.png',format='png')
 
 
     
-a2_param, a2_cov = curve_fit(linfit ,array(t2), array(a2), p0= [0,a2[-1]])
-b2_param, b2_cov = curve_fit(linfit ,array(t2), array(b2), p0= [0,b2[-1]])
-c2_param, c2_cov = curve_fit(linfit ,array(t2), array(c2), p0= [0,c2[-1]])
-d2_param, d2_cov = curve_fit(linfit ,array(t2), array(d2), p0= [0,d2[-1]])
-e2_param, e2_cov = curve_fit(linfit ,array(t2), array(e2), p0= [0,e2[-1]])
-f2_param, f2_cov = curve_fit(linfit ,array(t2), array(f2), p0= [0,f2[-1]])
-g2_param, g2_cov = curve_fit(linfit ,array(t2), array(g2), p0= [0,g2[-1]])
-h2_param, h2_cov = curve_fit(linfit ,array(t2), array(h2), p0= [0,h2[-1]])
+# a2_param, a2_cov = curve_fit(linfit ,array(t2), array(a2), p0= [0,a2[-1]])
+# b2_param, b2_cov = curve_fit(linfit ,array(t2), array(b2), p0= [0,b2[-1]])
+# c2_param, c2_cov = curve_fit(linfit ,array(t2), array(c2), p0= [0,c2[-1]])
+# d2_param, d2_cov = curve_fit(linfit ,array(t2), array(d2), p0= [0,d2[-1]])
+# e2_param, e2_cov = curve_fit(linfit ,array(t2), array(e2), p0= [0,e2[-1]])
+# f2_param, f2_cov = curve_fit(linfit ,array(t2), array(f2), p0= [0,f2[-1]])
+# g2_param, g2_cov = curve_fit(linfit ,array(t2), array(g2), p0= [0,g2[-1]])
+# h2_param, h2_cov = curve_fit(linfit ,array(t2), array(h2), p0= [0,h2[-1]])
 
 
 
@@ -427,9 +448,9 @@ h2_param, h2_cov = curve_fit(linfit ,array(t2), array(h2), p0= [0,h2[-1]])
 Tscale2 = linspace(2, Tmax2, 200)
 # to be used for other fits
 
-plt.figure('2bis')
-plt.plot(Tscale2,linfit(Tscale2,*a2_param),'-k',Tscale2,linfit(Tscale2,*b2_param),'k-',Tscale2,linfit(Tscale2,*c2_param),'k-',Tscale2,linfit(Tscale2,*d2_param),'-k',Tscale2,linfit(Tscale2,*e2_param),'k-',Tscale2,linfit(Tscale2,*f2_param),'-k',Tscale2,linfit(Tscale2,*g2_param),'k-')
-plt.savefig('Fitting_parameters_T-dependence.png',format='png') 
+# plt.figure('2bis')
+# plt.plot(Tscale2,linfit(Tscale2,*a2_param),'-k',Tscale2,linfit(Tscale2,*b2_param),'k-',Tscale2,linfit(Tscale2,*c2_param),'k-',Tscale2,linfit(Tscale2,*d2_param),'-k',Tscale2,linfit(Tscale2,*e2_param),'k-',Tscale2,linfit(Tscale2,*f2_param),'-k',Tscale2,linfit(Tscale2,*g2_param),'k-')
+# plt.savefig('Fitting_parameters_T-dependence.png',format='png') 
 
 
 
@@ -457,7 +478,7 @@ T0 = 150
 V_bg_extrapol = lambda x, A , l, C :  A * ( linfit(T0,a_param[0],a_param[1])*x**7 + linfit(T0,b_param[0],b_param[1])*x**6 + linfit(T0,c_param[0],c_param[1])*x**5 + linfit(T0,d_param[0],d_param[1])*x**4 + linfit(T0,e_param[0],e_param[1])*x**3 + linfit(T0,f_param[0],f_param[1])*x**2 + linfit(T0,g_param[0],g_param[1])*x ) + l*x + C
 # T0 : fixed temperature (constant) ; x : position  ; A : amplitude ; C : offset constant
 
-V_bg2_extrapol = lambda x, A , l, C :  A * ( linfit(T0,a2_param[0],a2_param[1])*x**7 + linfit(T0,b2_param[0],b2_param[1])*x**6 + linfit(T0,c2_param[0],c2_param[1])*x**5 + linfit(T0,d2_param[0],d2_param[1])*x**4 + linfit(T0,e2_param[0],e2_param[1])*x**3 + linfit(T0,f2_param[0],f2_param[1])*x**2 + linfit(T0,g2_param[0],g2_param[1])*x ) + l*x + C
+# V_bg2_extrapol = lambda x, A , l, C :  A * ( linfit(T0,a2_param[0],a2_param[1])*x**7 + linfit(T0,b2_param[0],b2_param[1])*x**6 + linfit(T0,c2_param[0],c2_param[1])*x**5 + linfit(T0,d2_param[0],d2_param[1])*x**4 + linfit(T0,e2_param[0],e2_param[1])*x**3 + linfit(T0,f2_param[0],f2_param[1])*x**2 + linfit(T0,g2_param[0],g2_param[1])*x ) + l*x + C
 
 
 
@@ -558,12 +579,14 @@ guess = [1. , 0. , 0. ]
 #_________________________________________________________________________________
 
 M = M_bg_subtracted(M_raw, 310, V_bg_extrapol, guess, 1)
-M2 = M_bg_subtracted(M_raw2, 310, V_bg2_extrapol, guess, 1)
+# M2 = M_bg_subtracted(M_raw2, 310, V_bg2_extrapol, guess, 1)
 
 ### Now is time to fit the dipole equation l. 22 to obtain each point
 # --->  Vdipole = lambda z, C, s, m0 : C + m0 * (2*(R**2 + (z + s)**2)**(-3/2) - (R**2 + (G + (z + s))**2)**(-3/2) - (R**2 + (-G + (z + s))**2)**(-3/2)) 
 
 def magnetization(Mf, Md, T_lim, V_extrap, P) :
+    # subtract the background extrapolated earlier up to T_lim and allows you to plot both the subtracted background with dipolar fit 
+    # as well as the original data with the outline of the extrapolated background if [Y] is answered.
     
     h = Mf[0,0]
     # the field (assumed constant) is stored
@@ -903,21 +926,35 @@ def magnetization_raw_diag(Mf,Md, T_lim, Vdip, p_guess) :
 
 
 
-#_________________________________________________________________________________
 
+
+
+
+
+
+
+
+
+
+
+#_________________________________________________________________________________
+##################################################################################
 
 Vdip0 = Vdipole_alt_centered
 
+##################################################################################
+#_________________________________________________________________________________
+
+guess = [0,0,0,0,0]
 
 #_________________________________________________________________________________
 
-guess = [0,0,0]
 
-#_________________________________________________________________________________
+##### Method 1 : fitting the raw data but with an altered dipole function #####
 
-h, tf , mzf , sf, d = magnetization(M,M_d,310,V_bg_extrapol, 0.8) 
+h, tf , mzf , sf, d = magnetization_raw_diag(M_raw , M_d , 300 , Vdip0 , guess)
 
-h2, tf2 , mzf2 , sf2, d2 = magnetization(M2,M_d2,310,V_bg2_extrapol, 0.8) 
+# h2, tf2 , mzf2 , sf2, d2 = magnetization(M2,M_d2,310,V_bg2_extrapol, 0.8) 
 
 plt.figure()
 plt.plot(tf, mzf, 'r-')
@@ -938,30 +975,64 @@ plt.title('Reference ferromagnet under field H = %s Oe'%(h))
 plt.savefig('TAS100+Sn_%s Oe_cooling_HTBS_R2.png',format='png') 
 plt.show()
 
-np.savetxt('TAS100+Sn_%s _Oe_NoPressure_HTBS.txt'%(h),np.c_[tf,mzf])
-np.savetxt('TAS100+Sn_%s _Oe_NoPressure_HTBS_R2.txt'%(h),np.c_[tf,d])
+np.savetxt('TAS100+Sn_%s _Oe_NoPressure_HTBS_method_1.txt'%(h),np.c_[tf,mzf])
+np.savetxt('TAS100+Sn_%s _Oe_NoPressure_HTBS_R2_method_1.txt'%(h),np.c_[tf,d])
 
 #________________________________________________________________________________
 
+##### Method 2 : subtracting the background then fitting  the regular dipole #####
+
+h, tf , mzf , sf, d = magnetization(M,M_d,310,V_bg_extrapol, 0.8) 
+
+# h2, tf2 , mzf2 , sf2, d2 = magnetization(M2,M_d2,310,V_bg2_extrapol, 0.8) 
+
 plt.figure()
-plt.plot(tf2, mzf2, 'r-')
+plt.plot(tf, mzf, 'r-')
 plt.xlabel('T(K)')
 plt.xlim((0,310))
 plt.ylabel('Magnetization (a.u)')
-plt.title('$TAS(100)$ + $Sn$ under pressure cooling under field H = %s Oe'%(h2))
-plt.savefig('TAS100+Sn_%s Oe_cooling_pressureApplied_HTBS.png'%(h2),format='png') 
+plt.title('$TAS(100)$ + $Sn$ cooling under field H = %s Oe'%(h))
+plt.savefig('TAS100+Sn_%s Oe_cooling_HTBS.png'%(h),format='png') 
 plt.show()
 
 
 plt.figure()
-plt.plot(tf2, d2, 'g-')
+plt.plot(tf, d, 'g-')
 plt.xlabel('T(K)')
 plt.xlim((0,310))
 plt.ylabel('$R^2$')
-plt.title('$TAS(100)$ + $Sn$ under pressure cooling under field H = %s Oe'%(h2))
-plt.savefig('TAS100+Sn_%s Oe_cooling_pressureApplied_HTBS_R2.png'%(h2),format='png') 
+plt.title('Reference ferromagnet under field H = %s Oe'%(h))
+plt.savefig('TAS100+Sn_%s Oe_cooling_HTBS_R2.png',format='png') 
 plt.show()
 
-np.savetxt('TAS100+Sn_%s _Oe_PressureApplied_HTBS.txt'%(h2),np.c_[tf2,mzf2])
-np.savetxt('TAS100+Sn_%s _Oe_PressureApplied_HTBS_R2.txt'%(h2),np.c_[tf2,d2])
+np.savetxt('TAS100+Sn_%s _Oe_NoPressure_HTBS_method_2.txt'%(h),np.c_[tf,mzf])
+np.savetxt('TAS100+Sn_%s _Oe_NoPressure_HTBS_R2_method_2.txt'%(h),np.c_[tf,d])
+
+
+
+
+
+
+
+# plt.figure()
+# plt.plot(tf2, mzf2, 'r-')
+# plt.xlabel('T(K)')
+# plt.xlim((0,310))
+# plt.ylabel('Magnetization (a.u)')
+# plt.title('$TAS(100)$ + $Sn$ under pressure cooling under field H = %s Oe'%(h2))
+# plt.savefig('TAS100+Sn_%s Oe_cooling_pressureApplied_HTBS.png'%(h2),format='png') 
+# plt.show()
+
+
+# plt.figure()
+# plt.plot(tf2, d2, 'g-')
+# plt.xlabel('T(K)')
+# plt.xlim((0,310))
+# plt.ylabel('$R^2$')
+# plt.title('$TAS(100)$ + $Sn$ under pressure cooling under field H = %s Oe'%(h2))
+# plt.savefig('TAS100+Sn_%s Oe_cooling_pressureApplied_HTBS_R2.png'%(h2),format='png') 
+# plt.show()
+
+# np.savetxt('TAS100+Sn_%s _Oe_PressureApplied_HTBS.txt'%(h2),np.c_[tf2,mzf2])
+# np.savetxt('TAS100+Sn_%s _Oe_PressureApplied_HTBS_R2.txt'%(h2),np.c_[tf2,d2])
 #_____________________________________________________________________________
