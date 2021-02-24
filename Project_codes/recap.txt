@@ -1,0 +1,4 @@
+23/02/2021
+
+- created the main class MagAnalysis
+- raw data and diag data converted to ndarray with empty entries filled by '0' automatically using a pandas function   
