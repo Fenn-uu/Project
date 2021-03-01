@@ -21,8 +21,8 @@ import Vdipole_functions
 
 ############### Parameters ################
 
-center = -0.25
-# assumed sample position shift
+center = -0.25 # in cm
+# assumed sample position shift 
 
 Tmin = 250
 Tmax = 310
@@ -31,6 +31,7 @@ Tmax = 310
 
 filename_1 = "Almax_pressure_cell (upright) _Gasket+TAS100+Nujol+Sn+Ruby_background_25_Oe_cooling_AmbientPressure_3cmfromtop_Pressure_Reapplied.dc.raw"
 
+sample_name = 'TAS (100)'
 
 ############### MPMS settings ################
 
@@ -42,7 +43,13 @@ L_scan = 4 # in cm
 
 ##############################################
 
+gain = [1.,2.,5.,10.] # table of the gain code values  in the diagnostic file to evaluate the moment, see Table 1 in the ref below
+M_emu = lambda m0, r, g : (m0*1.825)/(8890.6*(10**-r)*gain[int(g)]*0.9125)
+# calculates the magnetization in emu units from the gain 'g' and range 'r' tables in the .dc.diag file 
+# m0 is the amplitude from the functions defined in the Vdipole_functions
+# See ### https://qdusa.com/siteDocs/appNotes/1014-213.pdf    p.2
 
+##############################################
 
 
 
@@ -66,11 +73,19 @@ class MagAnalysis() :
             print('Diagnostic file not found...')
         self.n_r = arange( self.raw_data.shape[0] )
         # array of the total number of rows
+        
         self.BG_data = array([])
-        # can be filled with background data 
+        # can be filled with background data (1)
         self.BG_f = array([])
+        # can be filled with an interpolation function (2)
+        self.treated_data = array([])
         
         
+        
+        self.Vdip0 = Vdipole_functions.Vdipole_centered
+        # function to be used for plotting  and magnetization extraction (see Vdipole_functions for the complete list and number of arguments)
+        self.Vdip0_guess = array([2.61229485, 0.49397175])
+        # A start guess array with parameters of the Vdip0 function  
 
     
     def findV( self , T , acc ) :
@@ -346,8 +361,6 @@ class MagAnalysis() :
         '''
         
         self.treated_data = self.raw_data.copy()
-        
-        
             
         
         if self.BG_f.shape[0] != 0 :
@@ -372,8 +385,8 @@ class MagAnalysis() :
             P_BG = lambda x , T , H :  np.polynomial.polynomial.Polynomial(P_BG_coeff(T,H,n_deg))(x)
             # x : position , T : temperature, H :magnetic field
                       
-            bg_pos = array([])
-            bg_V = array([])
+            bg_pos = array([]) # To be filled with the position values at each measurement, then emptied
+            bg_V = array([])   # To be filled with the gradiometer voltages values at each measurement, then emptied
             
             for i in arange(self.n_r.shape[0]/cut) :
             
@@ -394,11 +407,127 @@ class MagAnalysis() :
                 A = param[1]*ones(N_points)
                 
                 self.treated_data[ int( i*cut+(N_scans-1)*(N_points)) : int(i*cut+(N_scans)*(N_points)) , 3] -= P_BG_shift( self.treated_data[ int(i*cut+(N_scans-1)*(N_points)):int( i*cut+(N_scans)*(N_points)) , 2] , s , A)
+                # Backgroud data subtraction
                 
                 bg_pos = array([])
                 bg_V = array([])
                 
             print('Background subtracted successfully !\nUse self.treated_data to access it.')
+        
+        else :
+            print('No background interpolation function found. Try adding a background then run self.BG_interpol_2D.')
+            
+    
+    def MagPlot_raw(self , plot_bool , newdata_bool) :
+        '''
+        If plot_bool is set to True, plots the gradiometer voltages against the position values for all measurements in self.raw_data,
+        then plots the magnetization value in emu and the R^2 value.
+        If plot_bool is set to False, then only the magnetization value and R^2 are plotted.
+        
+        If newdata_bool is set to true, self.treated_data is used if not empty. Else, the self.raw_data is used as default.
+        '''
+        
+        bg_pos = array([]) # To be filled with the position values at each measurement, then emptied
+        bg_V = array([])   # To be filled with the gradiometer voltages values at each measurement, then emptied
+        
+        m = array([]) # To be filled with the magnetization values in emu
+        T = array([]) # To be filled with temperature
+        H = array([]) # To be filled with magnetic fields
+        
+        X = linspace(-0.5*L_scan , 0.5*L_scan , 200) # position range for plotting
+        
+        V_guess = self.Vdip0_guess
+        
+        if self.treated_data.shape[0] != 0 and newdata_bool :
+            M_data = self.treated_data
+        else :
+            M_data = self.raw_data
+        
+        
+        if plot_bool :
+            
+            for i in arange(self.n_r.shape[0]/cut) :
+                
+                bg_pos = np.append( bg_pos , M_data[ int( i*cut+(N_scans-1)*(N_points)) : int(i*cut+(N_scans)*(N_points)) , 2] - 2 ) # appends the positions (between -2 and 2 cm)
+                bg_V = np.append( bg_V , M_data[ int( i*cut+(N_scans-1)*(N_points)) : int(i*cut+(N_scans)*(N_points)) , 3]) # appends the last gradiometer voltage scan (averaged)
+                
+                param , cov = curve_fit( self.Vdip0 , bg_pos , bg_V , p0=V_guess ) # optimal fit parameters and covariance
+                
+                m = np.append( m , M_emu( param[-1] , self.diag_data[i*N_scans,0] , self.diag_data[i*N_scans,1] ) )
+                T = np.append( T , M_data[ int( i*cut+(N_scans-1)*(N_points)) , 1])
+                H = np.append( H , M_data[ int( i*cut+(N_scans-1)*(N_points)) , 0])
+                
+                
+                plt.figure()
+                plt.plot( bg_pos , bg_V , 'bo' , X , self.Vdip0(X,*param), 'r-' )
+                # plots the experimental data (blue) and the fitted test dipole function (red)
+                plt.xlabel('x (cm)')
+                plt.ylabel('Voltage (V)')
+                plt.legend( ('Experimental data\nT = %s\nH = %s'%(T[-1],H[-1]),'Dipole fit') )
+                plt.show()
+                
+                V_guess = param
+                
+                bg_pos = array([])
+                bg_V = array([])
+            
+            print('Whole raw_data matrix analysed.')
+            
+        else : #same sequence but no plotting
+            
+            for i in arange(self.n_r.shape[0]/cut) :
+            
+                bg_pos = np.append( bg_pos , M_data[ int( i*cut+(N_scans-1)*(N_points)) : int(i*cut+(N_scans)*(N_points)) , 2] - 2 ) # appends the positions (between -2 and 2 cm)
+                bg_V = np.append( bg_V , M_data[ int( i*cut+(N_scans-1)*(N_points)) : int(i*cut+(N_scans)*(N_points)) , 3]) # appends the last gradiometer voltage scan (averaged)
+                
+                param , cov = curve_fit( self.Vdip0 , bg_pos , bg_V , p0=V_guess ) # optimal fit parameters and covariance
+                
+                m = np.append( m , M_emu( param[-1] , self.diag_data[i*N_scans,0] , self.diag_data[i*N_scans,1] ) )
+                T = np.append( T , M_data[ int( i*cut+(N_scans-1)*(N_points)) , 1])
+                H = np.append( H , M_data[ int( i*cut+(N_scans-1)*(N_points)) , 0])
+                
+                V_guess = param
+                
+                bg_pos = array([])
+                bg_V = array([])
+                
+        MT_yn = input('plot M(T) ? [y,n]')
+        
+        if MT_yn == 'y' or MT_yn == 'Y' :
+            
+            plt.figure()
+            plt.plot(T,m,'b-')
+            plt.xlabel('T (K)')
+            plt.ylabel('M (emu)')
+            plt.title('Magnetization of %s'%(sample_name))
+            plt.legend(('H = %s Oe'%(H[-1])))
+            plt.show()
+            
+        else :
+            
+            MH_yn = input('plot M(H) ? [y,n]')
+            
+            if MH_yn == 'y' or MH_yn == 'Y' :
+            
+                plt.figure()
+                plt.plot(T,m,'b-')
+                plt.xlabel('T (K)')
+                plt.ylabel('M (emu)')
+                plt.title('Magnetization of %s'%(sample_name))
+                plt.legend(('T = %s K'%(T[-1])))
+                plt.show()
+                
+        return T , H , m
+    
+        
+            
+        
+        
+            
+        
+        
+        
+            
                     
         
                                   
