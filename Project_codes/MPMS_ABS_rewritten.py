@@ -7,7 +7,8 @@ Created on Tue Feb 23 15:48:18 2021
 
 
 from scipy.interpolate import interp1d, Rbf
-from numpy import arange, linspace, loadtxt, array, polyfit, zeros, arctan, diag, sqrt, mean
+from scipy.optimize import curve_fit
+from numpy import arange, linspace, loadtxt, array, polyfit, zeros, ones, diag, sqrt, mean
 from pandas import read_table
 import numpy as np
 import matplotlib.pyplot as plt
@@ -67,6 +68,7 @@ class MagAnalysis() :
         # array of the total number of rows
         self.BG_data = array([])
         # can be filled with background data 
+        self.BG_f = array([])
         
         
 
@@ -112,10 +114,10 @@ class MagAnalysis() :
         for i in arange(self.raw_data.shape[0]/cut) :
             
             if Tmin <= self.raw_data[int(i*cut),1] <= Tmax :
-                for p in arange(N_points):
-                    bg_pos = np.append( bg_pos , self.raw_data[ int( i*cut+(N_scans-1)*(N_points)+p) ,2]-2) # appends the last position (between -2 and 2 cm)
-                    bg_V = np.append( bg_V , self.raw_data[ int( i*cut+(N_scans-1)*(N_points)+p ),3]) # appends the last of the averaged gradiometer voltage
-                    
+                
+                bg_pos = np.append( bg_pos , self.raw_data[ int( i*cut+(N_scans-1)*(N_points)) : int(i*cut+(N_scans)*(N_points)) , 2] - 2 ) # appends the positions (between -2 and 2 cm)
+                bg_V = np.append( bg_V , self.raw_data[ int( i*cut+(N_scans-1)*(N_points)) : int(i*cut+(N_scans)*(N_points)) , 3]) # appends the last gradiometer voltage scan (averaged)
+                     
                 param = polyfit(bg_pos , bg_V , n_deg) # A parameter array with n_deg + 1 elements
                                                        # arranged from highest order to lower
                                                        
@@ -260,6 +262,24 @@ class MagAnalysis() :
         Empties the self.BG_data matrix of all previously recorded background data. 
         '''
         self.BG_data = array([])
+        self.BG_f = array([])
+        
+    @classmethod
+    def BG_import(cls , BG_filename , n_deg) :
+        '''
+        This function imports the background from filename, runs the BG_polyfit_T_coeff functions on it and 
+        returns the T and H coordinates, as well as M_param
+        '''
+        
+        BG_new = cls(BG_filename)
+        
+        Tmin = min( BG_new.raw_data[:,1] ) # Thresholds
+        Tmax = max( BG_new.raw_data[:,1] )
+        
+        n_BG , T_BG , H_BG , M_param = BG_new.BG_polyfit_T_coeff(Tmin , Tmax , n_deg)
+        # The data arrays to be stored in order to subtract background
+        
+        return n_BG , T_BG , H_BG , M_param
     
     def BG_add(self, BG_filename , n_deg) :
         ''' 
@@ -273,23 +293,6 @@ class MagAnalysis() :
         
         Once the Rbf is established from self.BG_data, 
         '''
-        @classmethod
-        def BG_import(cls , BG_filename , n_deg) :
-            '''
-            This function imports the background from filename, runs the BG_polyfit_T_coeff functions on it and 
-            returns the T and H coordinates, as well as M_param
-            '''
-            
-            BG_new = cls(BG_filename)
-            
-            Tmin = min( BG_new.raw_data[:,1] ) # Thresholds
-            Tmax = max( BG_new.raw_data[:,1] )
-            
-            n_BG , T_BG , H_BG , M_param = BG_new.BG_polyfit_T_coeff(Tmin , Tmax , n_deg)
-            # The data arrays to be stored in order to subtract background
-            
-            return n_BG , T_BG , H_BG , M_param
-        
         
         if self.BG_data.shape[0] == 0 :
             
@@ -298,7 +301,7 @@ class MagAnalysis() :
             
             if fill_yn == 'y' or fill_yn == 'Y' :
                 
-                n_import , T_import , H_import , M_param_import = self.BG_add.BG_import(BG_filename, n_deg)
+                n_import , T_import , H_import , M_param_import = self.BG_import(BG_filename, n_deg)
                 print('%s magnetic measurements present in the background file.'%(n_import))
                 self.BG_data = np.concatenate( (array([H_import]).T, array([T_import]).T , M_param_import) ,axis=1)
                 # [:,0] : Magnetic field , [:,1] : Temperature , [:,2] : highest order coeff ,..., : [:,n_deg+3] : lowest order (constant)
@@ -318,7 +321,7 @@ class MagAnalysis() :
                 
                 if self.BG_deg == n_deg :
                     
-                    n_append , T_append , H_append , M_param_append = self.BG_add.BG_import(BG_filename, n_deg)
+                    n_append , T_append , H_append , M_param_append = self.BG_import(BG_filename, n_deg)
                     print('%s magnetic measurements present in the background file.'%(n_append))
                     M_new = np.concatenate( (array([H_append]).T, array([T_append]).T , M_param_append) ,axis=1)
                     # We first create a matrix of dim (N2 x (n_deg + 3)) in the same way as for the 'import' right above
@@ -336,10 +339,69 @@ class MagAnalysis() :
                 
     
         
-    def BG_subtraction_TH (self , ) :
+    def BG_subtraction_TH (self) :
+        '''
+        Creates a replica of self.raw_data where the last column's values (Gradiometer voltage) have the
+        background subtracted using the Rbf function computed from self.BG_interpol_2D.
+        '''
+        
+        self.treated_data = self.raw_data.copy()
         
         
-        self.treated_data = zeros( (self.n_r.shape[0] , 4 )
+            
+        
+        if self.BG_f.shape[0] != 0 :
+            
+            
+            f = self.BG_f
+            n_deg = self.BG_f.shape[0] - 1
+            
+            def P_BG_coeff(self,T,H,n) :
+                '''
+                Returns an array in ascending order of the polynomial coefficients (order n) of the gradiometer voltage at the
+                temperature T and magnetic field H
+                '''
+                p = array([])
+                
+                for i in arange(int(n+1)) :
+                    p = np.append( p , f[i](T,H)) # Evaluating the function for every coefficient (descending order)
+                
+                p = p[::-1] # inverting the order (last to first)
+                return p # Array of the polynomial coefficients in ASCENDING order
+            
+            P_BG = lambda x , T , H :  np.polynomial.polynomial.Polynomial(P_BG_coeff(T,H,n_deg))(x)
+            # x : position , T : temperature, H :magnetic field
+                      
+            bg_pos = array([])
+            bg_V = array([])
+            
+            for i in arange(self.n_r.shape[0]/cut) :
+            
+                
+                bg_pos = np.append( bg_pos , self.raw_data[ int( i*cut+(N_scans-1)*(N_points)) : int(i*cut+(N_scans)*(N_points)) , 2] - 2 ) # appends the positions (between -2 and 2 cm)
+                bg_V = np.append( bg_V , self.raw_data[ int( i*cut+(N_scans-1)*(N_points)) : int(i*cut+(N_scans)*(N_points)) , 3]) # appends the last gradiometer voltage scan (averaged)
+                    
+                T0 = self.raw_data[ int( i*cut+(N_scans-1)*(N_points)) , 1] # Temperature 
+                H0 = self.raw_data[ int( i*cut+(N_scans-1)*(N_points)) , 0] # Magnetic field 
+                
+                P_BG_shift = lambda x , s , A :  P_BG(x+s,T0,H0) + A
+                # The background data can be shifted vertically or horizontally with the variables s and A respectively
+                # The polynomial is first fitted to the data before the background subtraction
+                
+                param, cov = curve_fit(P_BG_shift , bg_pos , bg_V , p0 = [0.,0.]) # parameters and covariance arrays
+                
+                s = param[0]*ones(N_points)
+                A = param[1]*ones(N_points)
+                
+                self.treated_data[ int( i*cut+(N_scans-1)*(N_points)) : int(i*cut+(N_scans)*(N_points)) , 3] -= P_BG_shift( self.treated_data[ int(i*cut+(N_scans-1)*(N_points)):int( i*cut+(N_scans)*(N_points)) , 2] , s , A)
+                
+                bg_pos = array([])
+                bg_V = array([])
+                
+            print('Background subtracted successfully !\nUse self.treated_data to access it.')
+                    
+        
+                                  
         
         
             
