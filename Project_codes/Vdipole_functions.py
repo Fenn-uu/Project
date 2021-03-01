@@ -22,6 +22,12 @@ Vdipole = lambda z, C, s, m0 : C + m0 * (2*(R**2 + (z + s)**2)**(-3/2) - (R**2 +
 # m0 : amplitude, proportional to the magnetization
 
 
+Vdipole_lin = lambda  z , C , s , a , m0 : C + m0 * (2*(R**2 + (z + s)**2)**(-3/2) - (R**2 + (G + (z + s))**2)**(-3/2) - (R**2 + (-G + (z + s))**2)**(-3/2)) + a*z
+
+
+Vdipole_asym = lambda z , C , s , a , b , c , m0    : C + m0 * (2*(R**2 + (z + s)**2)**(-3/2) - (R**2 + (G + (z + s))**2)**(-3/2) - (R**2 + (-G + (z + s))**2)**(-3/2)) + a*z + b*abs((z+s)**4)  + c*z**3
+
+
 
 
 
@@ -40,12 +46,6 @@ Vdipole_cubic_centered = lambda z, C, a, b, c, m0 : C + m0 * (2*(R**2 + (z-cente
 
 
 Vdipole_quartic_centered = lambda z, C, a, b, c, d, m0 : C + m0 * (2*(R**2 + (z-center)**2)**(-3/2) - (R**2 + (G + (z-center))**2)**(-3/2) - (R**2 + (-G + (z-center))**2)**(-3/2)) + a*z + b*z**2  + c*z**3 + d*z**4
-
-
-Vdipole_lin = lambda  z , C , s , a , m0 : C + m0 * (2*(R**2 + (z + s)**2)**(-3/2) - (R**2 + (G + (z + s))**2)**(-3/2) - (R**2 + (-G + (z + s))**2)**(-3/2)) + a*z
-
-
-Vdipole_asym = lambda z , C , s , a , b , c , m0    : C + m0 * (2*(R**2 + (z + s)**2)**(-3/2) - (R**2 + (G + (z + s))**2)**(-3/2) - (R**2 + (-G + (z + s))**2)**(-3/2)) + a*z + b*abs((z+s)**4)  + c*z**3
 
 
 Vdipole_asym_centered = lambda z, C, a, b, c, m0 : C + m0 * (2*(R**2 + (z-center)**2)**(-3/2) - (R**2 + (G + (z-center))**2)**(-3/2) - (R**2 + (-G + (z-center))**2)**(-3/2)) + a*z + b*((z)**4)  + c*z**3
@@ -76,3 +76,6 @@ Vdipole_lin_hyper_centered = lambda z, C, B,  a, h, m0 :   C + m0 * (2*(R**2 + (
 
 
 ##################################################################################################################
+
+
+
