@@ -11,7 +11,9 @@ R = 0.97 # Longitudinal radius (cm)
 
 G = 1.519 # Longitudinal coil separation (cm)
 
-center = -0.25
+
+global center
+center = 0.0
 # assumed sample position shift
 
 
@@ -25,8 +27,10 @@ Vdipole = lambda z, C, s, m0 : C + m0 * (2*(R**2 + (z + s)**2)**(-3/2) - (R**2 +
 Vdipole_lin = lambda  z , C , s , a , m0 : C + m0 * (2*(R**2 + (z + s)**2)**(-3/2) - (R**2 + (G + (z + s))**2)**(-3/2) - (R**2 + (-G + (z + s))**2)**(-3/2)) + a*z
 
 
-Vdipole_asym = lambda z , C , s , a , b , c , m0    : C + m0 * (2*(R**2 + (z + s)**2)**(-3/2) - (R**2 + (G + (z + s))**2)**(-3/2) - (R**2 + (-G + (z + s))**2)**(-3/2)) + a*z + b*abs((z+s)**4)  + c*z**3
+Vdipole_asym = lambda z , C , s , a , b , c , m0    : C + m0 * (2*(R**2 + (z + s)**2)**(-3/2) - (R**2 + (G + (z + s))**2)**(-3/2) - (R**2 + (-G + (z + s))**2)**(-3/2)) + a*z + b*abs((z+s)**2)  + c*z**3
 
+
+Vdipole_alt = lambda z, C, s, a, b, m0 : C + m0 * (2*(R**2 + (z + s)**2)**(-3/2) - (R**2 + (G + (z + s))**2)**(-3/2) - (R**2 + (-G + (z + s))**2)**(-3/2)) + a*(z+s)**4 + b*z
 
 
 
@@ -36,11 +40,12 @@ Vdipole_asym = lambda z , C , s , a , b , c , m0    : C + m0 * (2*(R**2 + (z + s
 Vdipole_centered = lambda z, C, m0 : C + m0 * (2*(R**2 + (z - center)**2)**(-3/2) - (R**2 + (G + (z - center))**2)**(-3/2) - (R**2 + (-G + (z - center))**2)**(-3/2)) 
 
 
-Vdipole_alt = lambda z, C, s, a, b, m0 : C + m0 * (2*(R**2 + (z + s)**2)**(-3/2) - (R**2 + (G + (z + s))**2)**(-3/2) - (R**2 + (-G + (z + s))**2)**(-3/2)) + a*(z+s)**4 + b*z
+Vdipole_lin_centered = lambda z, C, a, m0 : C + m0 * (2*(R**2 + (z - center)**2)**(-3/2) - (R**2 + (G + (z - center))**2)**(-3/2) - (R**2 + (-G + (z - center))**2)**(-3/2)) + a*z
 
 
-Vdipole_alt_centered = lambda z, C, s, a, b, m0 : C + m0 * (2*(R**2 + (z-center)**2)**(-3/2) - (R**2 + (G + (z-center))**2)**(-3/2) - (R**2 + (-G + (z-center))**2)**(-3/2)) + a*abs(z+s)**2 + b*z
+Vdipole_alt_centered = lambda z, C, a, b, c, m0 : C + m0 * (2*(R**2 + (z-center)**2)**(-3/2) - (R**2 + (G + (z-center))**2)**(-3/2) - (R**2 + (-G + (z-center))**2)**(-3/2)) + a*abs(z)**4 + b*z**3 +c*z
 
+Vdipole_quad_centered = lambda z, C, a, b, m0 : C + m0 * (2*(R**2 + (z-center)**2)**(-3/2) - (R**2 + (G + (z-center))**2)**(-3/2) - (R**2 + (-G + (z-center))**2)**(-3/2)) + a*z**4 + b*z
 
 Vdipole_cubic_centered = lambda z, C, a, b, c, m0 : C + m0 * (2*(R**2 + (z-center)**2)**(-3/2) - (R**2 + (G + (z-center))**2)**(-3/2) - (R**2 + (-G + (z-center))**2)**(-3/2)) + a*z + b*z**2  + c*z**3
 
@@ -48,7 +53,7 @@ Vdipole_cubic_centered = lambda z, C, a, b, c, m0 : C + m0 * (2*(R**2 + (z-cente
 Vdipole_quartic_centered = lambda z, C, a, b, c, d, m0 : C + m0 * (2*(R**2 + (z-center)**2)**(-3/2) - (R**2 + (G + (z-center))**2)**(-3/2) - (R**2 + (-G + (z-center))**2)**(-3/2)) + a*z + b*z**2  + c*z**3 + d*z**4
 
 
-Vdipole_asym_centered = lambda z, C, a, b, c, m0 : C + m0 * (2*(R**2 + (z-center)**2)**(-3/2) - (R**2 + (G + (z-center))**2)**(-3/2) - (R**2 + (-G + (z-center))**2)**(-3/2)) + a*z + b*((z)**4)  + c*z**3
+Vdipole_asym_centered = lambda z, C, a, b, m0 : C + m0 * (2*(R**2 + (z-center)**2)**(-3/2) - (R**2 + (G + (z-center))**2)**(-3/2) - (R**2 + (-G + (z-center))**2)**(-3/2)) + a*z + b*z*3
 
 
 Vdipole_asym_centered_2 = lambda z, C, a, b, c,d , m0 : C + m0 * (2*(R**2 + (z-center)**2)**(-3/2) - (R**2 + (G + (z-center))**2)**(-3/2) - (R**2 + (-G + (z-center))**2)**(-3/2)) + a*z + b*(abs((z)**2))  + c*z**3 + d*((z)**4)
@@ -76,6 +81,3 @@ Vdipole_lin_hyper_centered = lambda z, C, B,  a, h, m0 :   C + m0 * (2*(R**2 + (
 
 
 ##################################################################################################################
-
-
-
