@@ -8,7 +8,7 @@ Created on Tue Feb 23 15:48:18 2021
 
 from scipy.interpolate import interp1d, Rbf
 from scipy.optimize import curve_fit
-from numpy import arange, linspace, loadtxt, array, polyfit, zeros, ones, diag, sqrt, mean
+from numpy import arange, linspace, array, polyfit
 from pandas import read_table
 import numpy as np
 import matplotlib.pyplot as plt
@@ -20,8 +20,8 @@ import Vdipole_functions
 ### for more information.
 
 ############### Parameters ################
-
-center = -0.25 # in cm
+global center
+center = -0.5 # in cm
 # assumed sample position shift 
 
 Tmin = 250
@@ -29,9 +29,9 @@ Tmax = 310
 #Temperature range assessed for background extrapolation
 
 
-filename_1 = "Almax_pressure_cell (upright) _Gasket+TAS100+Nujol+Sn+Ruby_background_25_Oe_cooling_AmbientPressure_3cmfromtop_Pressure_Reapplied.dc.raw"
+filename_1 = "Almax_pressure_cell (upright) _TAS0+Nujol+Ruby_MT_10_Oe_4K-2K_PressureApplied_2.4cmfromtop.dc.raw"
 
-sample_name = 'TAS (100)'
+sample_name = 'TAS(0) in HP cell'
 
 ############### MPMS settings ################
 
@@ -82,9 +82,9 @@ class MagAnalysis() :
         
         
         
-        self.Vdip0 = Vdipole_functions.Vdipole_centered
+        self.Vdip0 = Vdipole_functions.Vdipole_lin_centered
         # function to be used for plotting  and magnetization extraction (see Vdipole_functions for the complete list and number of arguments)
-        self.Vdip0_guess = array([2.61229485, 0.49397175])
+        self.Vdip0_guess = array([ 0. , 0., 1.])
         # A start guess array with parameters of the Vdip0 function  
 
     
@@ -95,11 +95,14 @@ class MagAnalysis() :
         bg0_pos = array([])
         bg0_V = array([])
         for i in self.n_r :
-            if T - acc < self.raw_data[i,1] < T + acc :
+            if T - acc < self.raw_data[i,1] < T + acc and self.raw_data[i,3] != 0. :
                 print('Matching T value found.\n\t T= %a'%(self.raw_data[i,1]))
-                for p in range(N_points):
-                    bg0_pos = np.append(bg0_pos, self.raw_data[i+(N_scans-1)*(N_points)+p,2] - 2 ) # appends the last position (between -2 and 2 cm)
-                    bg0_V = np.append(bg0_V, self.raw_data[i+(N_scans-1)*(N_points)+p,3] ) # appends the last of the averaged gradiometer voltage
+                # for p in range(N_points):
+                bg0_pos = np.append( bg0_pos , self.raw_data[ int(i) : int(i+N_points) , 2] - 2 ) # appends the positions (between -2 and 2 cm)
+                bg0_V = np.append( bg0_V , self.raw_data[ int(i) : int(i+N_points) , 3]) # appends the last gradiometer voltage scan (averaged)
+                
+                    # bg0_pos = np.append(bg0_pos, self.raw_data[i+(N_scans-1)*(N_points)+p,2] - 2 ) # appends the last position (between -2 and 2 cm)
+                    # bg0_V = np.append(bg0_V, self.raw_data[i+(N_scans-1)*(N_points)+p,3] ) # appends the last of the averaged gradiometer voltage
                 break
         if bg0_pos.size == 0 : # if no value is found then the arrays should remain empty 
             print('No matching T value found...')
@@ -113,7 +116,8 @@ class MagAnalysis() :
         with polynomials of degree 'n_deg' for each point.
         A new point starts every 'cut' rows, see l.38
         
-        Returns 
+        Returns n the number of magnetic measurements present, t the list of temperatures
+                h the list of fields and M_param a matrix of polynomial coefficients (descending order of the columns)
         
         The number of voltage points per dataset is self.raw_data.shape[0], so the number of 
         magnetization points is self.raw_data.shape[0]/cut
@@ -183,7 +187,7 @@ class MagAnalysis() :
             
             H_yn = input('Interpolate for magnetic field ? [y/n] \n(T = cst)')
             
-            if H_yn == 'Y' or T_yn == 'y' :
+            if H_yn == 'Y' or H_yn == 'y' :
                 
                 n_points , T , H , M_start = self.BG_polyfit_T_coeff(Tmin_cut,Tmax_cut,n_deg)
                 
@@ -270,7 +274,21 @@ class MagAnalysis() :
             
         return f_interp
     
-    
+    def P_BG_coeff(self,T,H) :
+        '''
+        Returns an array in ascending order of the polynomial coefficients (order n) of the gradiometer voltage at the
+        temperature T and magnetic field H
+        '''
+        
+        f = self.BG_f
+        n = self.BG_deg
+        p = array([])
+        
+        for i in arange(int(n+1)) :
+            p = np.append( p , f[i](T,H)) # Evaluating the function for every coefficient (descending order)
+        
+        p = p[::-1] # inverting the order (last to first)
+        return p # Array of the polynomial coefficients in ASCENDING order
     
     def BG_erase(self) :
         '''
@@ -366,27 +384,13 @@ class MagAnalysis() :
         if self.BG_f.shape[0] != 0 :
             
             
-            f = self.BG_f
-            n_deg = self.BG_f.shape[0] - 1
-            
-            def P_BG_coeff(self,T,H,n) :
-                '''
-                Returns an array in ascending order of the polynomial coefficients (order n) of the gradiometer voltage at the
-                temperature T and magnetic field H
-                '''
-                p = array([])
-                
-                for i in arange(int(n+1)) :
-                    p = np.append( p , f[i](T,H)) # Evaluating the function for every coefficient (descending order)
-                
-                p = p[::-1] # inverting the order (last to first)
-                return p # Array of the polynomial coefficients in ASCENDING order
-            
-            P_BG = lambda x , T , H :  np.polynomial.polynomial.Polynomial(P_BG_coeff(T,H,n_deg))(x)
+            P_BG = lambda x , T , H :  np.polynomial.polynomial.Polynomial(self.P_BG_coeff(T,H))(x)
             # x : position , T : temperature, H :magnetic field
                       
             bg_pos = array([]) # To be filled with the position values at each measurement, then emptied
             bg_V = array([])   # To be filled with the gradiometer voltages values at each measurement, then emptied
+            
+            P_BG_shift_guess = [0.,0.] #very first guess of P_BG_shift described below
             
             for i in arange(self.n_r.shape[0]/cut) :
             
@@ -397,17 +401,16 @@ class MagAnalysis() :
                 T0 = self.raw_data[ int( i*cut+(N_scans-1)*(N_points)) , 1] # Temperature 
                 H0 = self.raw_data[ int( i*cut+(N_scans-1)*(N_points)) , 0] # Magnetic field 
                 
-                P_BG_shift = lambda x , s , A :  P_BG(x+s,T0,H0) + A
-                # The background data can be shifted vertically or horizontally with the variables s and A respectively
-                # The polynomial is first fitted to the data before the background subtraction
+                P_BG_shift = lambda x , s, A  : P_BG(x+s,T0,H0) + A
+                #The background data can be shifted vertically or horizontally with the variables s and A respectively
+                #The polynomial is first fitted to the data before the background subtraction
                 
-                param, cov = curve_fit(P_BG_shift , bg_pos , bg_V , p0 = [0.,0.]) # parameters and covariance arrays
+                param, cov = curve_fit(P_BG_shift , bg_pos , bg_V , p0 = P_BG_shift_guess) # parameters and covariance arrays
                 
-                s = param[0]*ones(N_points)
-                A = param[1]*ones(N_points)
-                
-                self.treated_data[ int( i*cut+(N_scans-1)*(N_points)) : int(i*cut+(N_scans)*(N_points)) , 3] -= P_BG_shift( self.treated_data[ int(i*cut+(N_scans-1)*(N_points)):int( i*cut+(N_scans)*(N_points)) , 2] , s , A)
+                self.treated_data[ int( i*cut+(N_scans-1)*(N_points)) : int(i*cut+(N_scans)*(N_points)) , 3] -= P_BG_shift( self.treated_data[ int(i*cut+(N_scans-1)*(N_points)):int( i*cut+(N_scans)*(N_points)) , 2] - 2 , *param )
                 # Backgroud data subtraction
+                
+                P_BG_shift_guess = param
                 
                 bg_pos = array([])
                 bg_V = array([])
@@ -416,6 +419,8 @@ class MagAnalysis() :
         
         else :
             print('No background interpolation function found. Try adding a background then run self.BG_interpol_2D.')
+        
+        return self.treated_data
             
     
     def MagPlot_raw(self , plot_bool , newdata_bool) :
@@ -451,9 +456,13 @@ class MagAnalysis() :
                 bg_pos = np.append( bg_pos , M_data[ int( i*cut+(N_scans-1)*(N_points)) : int(i*cut+(N_scans)*(N_points)) , 2] - 2 ) # appends the positions (between -2 and 2 cm)
                 bg_V = np.append( bg_V , M_data[ int( i*cut+(N_scans-1)*(N_points)) : int(i*cut+(N_scans)*(N_points)) , 3]) # appends the last gradiometer voltage scan (averaged)
                 
-                param , cov = curve_fit( self.Vdip0 , bg_pos , bg_V , p0=V_guess ) # optimal fit parameters and covariance
                 
-                m = np.append( m , M_emu( param[-1] , self.diag_data[i*N_scans,0] , self.diag_data[i*N_scans,1] ) )
+                try :
+                    param , cov = curve_fit( self.Vdip0 , bg_pos , bg_V , p0=V_guess ) # optimal fit parameters and covariance
+                except :
+                    print('curve_fit couldn\'t find optimized parameter (T = %s K ; H = %s Oe)'%( M_data[ int( i*cut+(N_scans-1)*(N_points)) , 1] , M_data[ int( i*cut+(N_scans-1)*(N_points)) , 0] ))
+                
+                m = np.append( m , M_emu( param[-1] , self.diag_data[ int(i*N_scans) , 0] , self.diag_data[ int(i*N_scans) , 1] ) )
                 T = np.append( T , M_data[ int( i*cut+(N_scans-1)*(N_points)) , 1])
                 H = np.append( H , M_data[ int( i*cut+(N_scans-1)*(N_points)) , 0])
                 
@@ -480,9 +489,12 @@ class MagAnalysis() :
                 bg_pos = np.append( bg_pos , M_data[ int( i*cut+(N_scans-1)*(N_points)) : int(i*cut+(N_scans)*(N_points)) , 2] - 2 ) # appends the positions (between -2 and 2 cm)
                 bg_V = np.append( bg_V , M_data[ int( i*cut+(N_scans-1)*(N_points)) : int(i*cut+(N_scans)*(N_points)) , 3]) # appends the last gradiometer voltage scan (averaged)
                 
-                param , cov = curve_fit( self.Vdip0 , bg_pos , bg_V , p0=V_guess ) # optimal fit parameters and covariance
+                try :
+                    param , cov = curve_fit( self.Vdip0 , bg_pos , bg_V , p0=V_guess ) # optimal fit parameters and covariance
+                except :
+                    print('curve_fit couldn\'t find optimized parameter (T = %s K ; H = %s Oe)'%( M_data[ int( i*cut+(N_scans-1)*(N_points)) , 1] , M_data[ int( i*cut+(N_scans-1)*(N_points)) , 0] ))
                 
-                m = np.append( m , M_emu( param[-1] , self.diag_data[i*N_scans,0] , self.diag_data[i*N_scans,1] ) )
+                m = np.append( m , M_emu( param[-1] , self.diag_data[ int(i*N_scans),0] , self.diag_data[int(i*N_scans),1] ) )
                 T = np.append( T , M_data[ int( i*cut+(N_scans-1)*(N_points)) , 1])
                 H = np.append( H , M_data[ int( i*cut+(N_scans-1)*(N_points)) , 0])
                 
@@ -500,7 +512,7 @@ class MagAnalysis() :
             plt.xlabel('T (K)')
             plt.ylabel('M (emu)')
             plt.title('Magnetization of %s'%(sample_name))
-            plt.legend(('H = %s Oe'%(H[-1])))
+            plt.legend( [' H = %s Oe'%(H[0])] )
             plt.show()
             
         else :
@@ -510,42 +522,11 @@ class MagAnalysis() :
             if MH_yn == 'y' or MH_yn == 'Y' :
             
                 plt.figure()
-                plt.plot(T,m,'b-')
-                plt.xlabel('T (K)')
+                plt.plot(H,m,'b-')
+                plt.xlabel('H (Oe)')
                 plt.ylabel('M (emu)')
                 plt.title('Magnetization of %s'%(sample_name))
-                plt.legend(('T = %s K'%(T[-1])))
+                plt.legend( ['T = %s K'%(T[-1])] )
                 plt.show()
                 
         return T , H , m
-    
-        
-            
-        
-        
-            
-        
-        
-        
-            
-                    
-        
-                                  
-        
-        
-            
-                
-    
-        
-    
-    
-        
-                
-                
-        
-        
-        
-        
-        
-        
-        
